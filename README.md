@@ -1,5 +1,7 @@
 # 🚀 AI Content Generator Pro
 
+![{D0F559DE-F977-406F-899D-849E1AF345C9}](https://github.com/user-attachments/assets/69084d47-b205-48f9-b6fc-03762e7ff59c)
+
 **Professional multi-platform content creation powered by Google Gemini AI**
 
 &#x20; &#x20;
