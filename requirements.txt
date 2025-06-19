@@ -1,0 +1,5 @@
+gradio>=4.0.0
+google-generativeai>=0.3.0
+python-dotenv>=1.0.0
+pathlib>=1.0.0
+logging>=0.4.9.6

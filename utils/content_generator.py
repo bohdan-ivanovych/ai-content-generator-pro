@@ -1,0 +1,211 @@
+"""
+Content generation utilities using Google Gemini AI
+"""
+
+import google.generativeai as genai
+import logging
+from pathlib import Path
+from typing import Optional, Dict, Any
+import time
+from config import Config
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+class ContentGenerator:
+    """Main content generation class"""
+
+    def __init__(self):
+        """Initialize the content generator"""
+        if not Config.GOOGLE_API_KEY:
+            raise ValueError("Google API key not configured!")
+
+        # Configure the API
+        genai.configure(api_key=Config.GOOGLE_API_KEY)
+        self.model = genai.GenerativeModel(Config.MODEL_NAME)
+
+        logger.info("ContentGenerator initialized successfully")
+
+    def load_template(self, template_name: str = "prompt_template.txt") -> str:
+        """
+        Load prompt template from file
+
+        Args:
+            template_name: Name of the template file
+
+        Returns:
+            Template content as string
+        """
+        # Try to load from templates directory first
+        template_paths = [
+            Path("templates") / template_name,
+            Path(template_name),  # Current directory fallback
+        ]
+
+        for template_path in template_paths:
+            if template_path.exists():
+                try:
+                    with open(template_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                        logger.info(f"Template loaded from: {template_path}")
+                        return content
+                except Exception as e:
+                    logger.error(f"Error reading template {template_path}: {e}")
+
+        logger.warning("Template file not found, using default template")
+        return self._get_default_template()
+
+    def _get_default_template(self) -> str:
+        """Return default template if file not found"""
+        return """
+Create high-quality, comprehensive content in {language} about {topic}.
+
+🎯 PRIMARY GOAL: {primary_goal}
+👥 TARGET AUDIENCE: {target_audience}
+🗣️ BRAND VOICE: {brand_voice}
+💡 KEY MESSAGE: {key_message}
+
+📎 ADDITIONAL CONTEXT: {additional_info}
+
+CONTENT REQUIREMENTS:
+✅ Structure the content with clear headings and subheadings
+✅ Write in the specified brand voice and tone
+✅ Tailor language and complexity to the target audience
+✅ Include engaging introduction that hooks the reader
+✅ Provide valuable, actionable information
+✅ Use bullet points and numbered lists where appropriate
+✅ Include relevant examples, statistics, or case studies
+✅ Add a compelling conclusion with clear next steps
+✅ Ensure content is SEO-friendly and scannable
+✅ Include a call-to-action if appropriate for the goal
+
+FORMATTING GUIDELINES:
+- Use markdown formatting for better readability
+- Include headers (##, ###) to organize content
+- Use **bold** for important points
+- Use bullet points for lists
+- Keep paragraphs concise (2-4 sentences)
+- Include transition sentences between sections
+
+Please create content that is:
+- Original and unique
+- Well-researched and informative
+- Engaging and interesting to read
+- Appropriate length for the topic and goal
+- Professional and error-free
+"""
+
+    def prepare_prompt(self, **kwargs) -> str:
+        """
+        Prepare the prompt by formatting the template with provided data
+
+        Args:
+            **kwargs: Keyword arguments for template formatting
+
+        Returns:
+            Formatted prompt string
+        """
+        template = self.load_template()
+
+        # Ensure all required fields have values
+        formatted_kwargs = {
+            'language': kwargs.get('language', 'English'),
+            'topic': kwargs.get('topic', ''),
+            'primary_goal': kwargs.get('primary_goal', ''),
+            'target_audience': kwargs.get('target_audience', ''),
+            'brand_voice': kwargs.get('brand_voice', 'Professional'),
+            'key_message': kwargs.get('key_message') or 'Not specified',
+            'additional_info': kwargs.get('additional_info') or 'None provided'
+        }
+
+        try:
+            return template.format(**formatted_kwargs)
+        except KeyError as e:
+            logger.error(f"Missing template variable: {e}")
+            raise ValueError(f"Template formatting error: missing {e}")
+
+    def generate(self, **kwargs) -> str:
+        """
+        Generate content using the AI model
+
+        Args:
+            **kwargs: Content generation parameters
+
+        Returns:
+            Generated content as string
+        """
+        try:
+            # Prepare the prompt
+            prompt = self.prepare_prompt(**kwargs)
+
+            logger.info(f"Generating content for topic: {kwargs.get('topic', 'Unknown')}")
+
+            # Generate content
+            response = self.model.generate_content(prompt)
+
+            if not response.text:
+                raise ValueError("No content generated by the model")
+
+            logger.info("Content generated successfully")
+            return response.text
+
+        except Exception as e:
+            logger.error(f"Content generation error: {e}")
+            raise
+
+    def generate_with_metadata(self, **kwargs) -> Dict[str, Any]:
+        """
+        Generate content and return with metadata
+
+        Args:
+            **kwargs: Content generation parameters
+
+        Returns:
+            Dictionary containing content and metadata
+        """
+        start_time = time.time()
+
+        try:
+            content = self.generate(**kwargs)
+
+            result = {
+                'content': content,
+                'metadata': {
+                    'topic': kwargs.get('topic', ''),
+                    'language': kwargs.get('language', 'English'),
+                    'brand_voice': kwargs.get('brand_voice', 'Professional'),
+                    'generated_at': time.strftime("%Y-%m-%d %H:%M:%S"),
+                    'generation_time': round(time.time() - start_time, 2),
+                    'word_count': len(content.split()) if content else 0,
+                    'character_count': len(content) if content else 0
+                },
+                'success': True,
+                'error': None
+            }
+
+            return result
+
+        except Exception as e:
+            return {
+                'content': None,
+                'metadata': {
+                    'generated_at': time.strftime("%Y-%m-%d %H:%M:%S"),
+                    'generation_time': round(time.time() - start_time, 2),
+                },
+                'success': False,
+                'error': str(e)
+            }
+
+    def test_connection(self) -> bool:
+        """
+        Test the API connection
+
+        Returns:
+            True if connection successful, False otherwise
+        """
+        try:
+            test_response = self.model.generate_content("Say 'Hello, AI Content Generator is working!'")
+            return bool(test_response.text)
+        except Exception as e:
+            logger.error(f"API connection test failed: {e}")
+            return False
